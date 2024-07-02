@@ -1,5 +1,5 @@
 """Made by BRONCO SPACE of CAL POLY POMONA
-Edited by ARUSH KHARE of IRVINGTON CUBESAT"""
+Edited by ARUSH KHARE, MATTHEW CHAN, and MASON of IRVINGTON CUBESAT"""
 
 # Initialize Libraries
 import board
@@ -79,6 +79,55 @@ def serial_command(name):
     
     return wrapped
 
+def capture(name, folder="test-images"):
+    # print("ok: zeroing buffer")
+    for i in range(len(buf)):
+        buf[i] = 0
+    print("ok: capturing test photo")
+    try:
+        cam.capture(buf)
+    except Exception as e:
+        print("error:", e)
+        return
+    print(f"ok: saving test photo to images/{folder}/{name}.jpeg | byte count:", len(buf))
+    
+    eoi = buf.find(b"\xff\xd9") # this can false positive, parse the jpeg for better results
+    # print("ok: eoi marker (possibly inaccurate):", eoi)
+
+    if eoi == -1:
+        print("warn: IMAGE IS PROBABLY TRUNCATED")
+
+    try:
+        os.mkdir("images")
+    except:
+        print("Image Folder Exists")
+
+    try:
+        os.mkdir(f"images/{folder}")
+    except:
+        print(f"Folder {folder} Exists")
+
+    #print(buf)
+    photo_file = open(f"images/{folder}/{name}.jpeg", 'wb')
+    photo_file.write(buf)
+    photo_file.close()
+    print("ok: done saving")
+
+def sortThroughDir(dir):
+    # Maps through dir to return sorted list of touples of name and file size
+    return sorted(
+        list(
+            map(
+                lambda f: (
+                    f,
+                    os.stat(os.getcwd() +"/" + dir + "/" + f)[6],
+                ),
+                os.listdir(dir),
+            )
+        ),
+        key=lambda x: x[1]
+    )[::-1]
+
 @serial_command("ping")
 def _(_):
     print("pong")
@@ -94,6 +143,12 @@ def _(_):
     mc.on_next_reset(mc.RunMode.SAFE_MODE)
     mc.reset()
 
+#Exit Safe Mode
+"""
+import microcontroller as mc
+mc.on_next_reset(mc.RunMode.NORMAL)
+mc.reset()
+"""
 @serial_command("exit")
 def _(_):
     print("ok: exiting serial handler")
@@ -129,30 +184,35 @@ def _(args):
     except Exception as e:
         print("error: io error:", e)
 
+#Captures Multiple Photos
+@serial_command("captureSprint")
+def _(args):
+    if len(args) < 1:
+        print("Capturing 10 images to dir 'sprint'")
+        for i in range(1, 11):
+            capture(f"image-{i}", "sprint")
+    elif len(args) < 2:
+        print(f"Capturing 10 images to dir {args[0]}")
+        for i in range(1, 11):
+            capture(f"image-{i}", args[0])
+    else:
+        print(f"Capturing {args[1]} images to dir {args[0]}")
+        for i in range(1, args[1]+1):
+            capture(f"image-{i}", args[0])
+
 @serial_command("capture")
-def _(_):
-    print("ok: zeroing buffer")
-    for i in range(len(buf)):
-        buf[i] = 0
-    print("ok: capturing test photo")
-    try:
-        cam.capture(buf)
-    except Exception as e:
-        print("error:", e)
-        return
-    print("ok: saving test photo to photo_test.jpeg | byte count:", len(buf))
-    
-    eoi = buf.find(b"\xff\xd9") # this can false positive, parse the jpeg for better results
-    print("ok: eoi marker (possibly inaccurate):", eoi)
+def _(args):
+    if len(args) < 1:
+        capture("photo_test")
+    else:
+        capture(args[0])
 
-    if eoi == -1:
-        print("warn: IMAGE IS PROBABLY TRUNCATED")
-
-    #print(buf)
-    photo_file = open(f"photo_test.jpeg", 'wb')
-    photo_file.write(buf)
-    photo_file.close()
-    print("ok: done saving")
+@serial_command("sort")
+def _(args):
+    if len(args) < 1:
+        print(sortThroughDir("images/test-images"))
+    else:
+        print(sortThroughDir(f"images/{args[0]}"))
 
 @serial_command("camset")
 def _(args):
@@ -251,4 +311,3 @@ def check_for_pc_command():
 
 while True:
     check_for_pc_command()
-
